@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ConstraintInput from './components/ConstraintInput'
 import ScheduleResults from './components/ScheduleResults'
 import './App.css'
@@ -7,12 +7,19 @@ function App() {
   const [phase, setPhase] = useState('input') // 'input' | 'loading' | 'results'
   const [schedules, setSchedules] = useState([])
   const [query, setQuery] = useState('')
-  const [error, setError] = useState(null)
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'dark'
+    return window.localStorage.getItem('huskypath-theme') === 'light' ? 'light' : 'dark'
+  })
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem('huskypath-theme', theme)
+  }, [theme])
 
   const handleSubmit = async (inputText) => {
     setQuery(inputText)
     setPhase('loading')
-    setError(null)
 
     try {
       // Hit the NLP parser endpoint — returns 501 until Kieran's parser is live
@@ -34,7 +41,7 @@ function App() {
       const data = await res.json()
       setSchedules(data.schedules ?? MOCK_SCHEDULES)
       setPhase('results')
-    } catch (err) {
+    } catch {
       // Network error (server not running) — fall back to mock
       await new Promise((r) => setTimeout(r, 800))
       setSchedules(MOCK_SCHEDULES)
@@ -46,7 +53,6 @@ function App() {
     setPhase('input')
     setSchedules([])
     setQuery('')
-    setError(null)
   }
 
   return (
@@ -58,6 +64,17 @@ function App() {
             <span className="brand-name">HuskyPath</span>
           </div>
           <p className="brand-tagline">AI-powered schedule planner for UW students</p>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={() => setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            <span className="theme-toggle-icon" aria-hidden="true">
+              {theme === 'dark' ? '☀' : '☾'}
+            </span>
+            <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          </button>
         </div>
       </header>
 
@@ -93,8 +110,6 @@ function App() {
 }
 
 // ─── MOCK DATA (used when server returns 501) ─────────────────────────────────
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-
 const MOCK_SCHEDULES = [
   {
     id: 1,
