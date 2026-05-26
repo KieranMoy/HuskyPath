@@ -16,6 +16,7 @@ const cors = require('cors');
 const coursesRouter   = require('./routes/courses');
 const parseRouter     = require('./routes/parse');     // owner: Max
 const schedulesRouter = require('./routes/schedules'); // owner: Kieran
+const planRouter      = require('./routes/plan');      // owner: Kieran — integration glue
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -30,6 +31,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/courses',            coursesRouter);
 app.use('/api/parse-constraints',  parseRouter);
 app.use('/api/schedules',          schedulesRouter);
+app.use('/api/plan',               planRouter);
 
 // 404 fallback for unknown API routes
 app.use('/api', (req, res) => {
