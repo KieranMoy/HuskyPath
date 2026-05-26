@@ -35,13 +35,21 @@ User input ──► Claude API (NLP parser) ──► Structured constraints
 ```
 client/          React + Vite frontend
 server/
-  index.js              Express entry point
-  routes/courses.js     /api/courses endpoints
-  services/uwScraper.js UW Time Schedule HTML parser
-  scripts/scrape.js     CLI: scrape a department to JSON
-  data/                 Cached / sample course data
-  test/                 Node built-in test runner specs
-  .env.example          Environment template
+  index.js                       Express entry point
+  routes/
+    courses.js                   /api/courses
+    parse.js                     /api/parse-constraints (Gemini NLP)
+    schedules.js                 /api/schedules        (generator + scorer)
+    plan.js                      /api/plan             (one-shot pipeline)
+  services/
+    uwScraper.js                 UW Time Schedule HTML parser
+    constraintParser.js          NLP → structured constraints
+    scheduler.js                 conflict-free candidate generation
+    scorer.js                    4-dim weighted scoring + explanations
+  scripts/scrape.js              CLI: scrape a department to JSON
+  data/                          Cached / sample course data
+  test/                          Node built-in test runner specs
+  .env.example                   Environment template
 ```
 
 ## Quickstart
@@ -101,11 +109,44 @@ Output shape (one section):
 }
 ```
 
+## One-shot `/api/plan` endpoint
+
+Frontends should call `POST /api/plan` instead of orchestrating the three lower-level endpoints themselves. It takes natural-language text and returns ranked schedules in a single round trip.
+
+```bash
+curl -X POST http://localhost:3001/api/plan \
+  -H 'content-type: application/json' \
+  -d '{
+    "text": "no classes before 10am, no Fridays, prefer afternoons",
+    "courseCodes": ["CSE 142", "MATH 124", "ENGL 131"],
+    "topN": 3
+  }'
+```
+
+Response shape:
+
+```json
+{
+  "constraints": { "no_before": "10:00", "excluded_days": ["F"], "preferred_times": ["afternoon"] },
+  "candidatesEvaluated": 12,
+  "schedules": [
+    {
+      "sections": [ ... ],
+      "score": 0.84,
+      "breakdown": { "workload_balance": 0.9, "time_gap_efficiency": 0.8, "difficulty_curve": 0.7, "constraint_satisfaction": 1.0 },
+      "explanation": "This schedule minimizes dead time between classes and respects the preferences you listed."
+    }
+  ]
+}
+```
+
+Lower-level endpoints (`/api/parse-constraints`, `/api/courses`, `/api/schedules`) remain available for debugging and partial integrations.
+
 ## Tests
 
 ```bash
 cd server
-node --test test/
+node --test test/*.test.js
 ```
 
 No third-party test framework — Node 18+ built-in runner only.
@@ -114,8 +155,10 @@ No third-party test framework — Node 18+ built-in runner only.
 
 - [x] Repo, React frontend on Vercel, Express + PG backend
 - [x] **UW Time Schedule scraper + `/api/courses` endpoint**
-- [ ] NLP constraint parser (Claude API)
-- [ ] Candidate-schedule generator (conflict-free search)
-- [ ] Multi-dimensional scoring model + ranker
-- [ ] React calendar UI with drag-and-drop comparison
+- [x] **NLP constraint parser (Gemini API)**
+- [x] **Candidate-schedule generator (conflict-free search)**
+- [x] **Multi-dimensional scoring model + ranker**
+- [x] **One-shot `/api/plan` integration endpoint**
+- [ ] React calendar UI wired to live `/api/plan`
+- [ ] Live UW scraper verified against real Time Schedule pages
 - [ ] iCal / PDF export

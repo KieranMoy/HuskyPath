@@ -25,6 +25,9 @@
  *   - no_after:         "HH:MM"   reject sections ending after this
  *   - excluded_days:    string[]  reject any section meeting on these days
  *                                 (accepts "F" / "Th" or "Friday" / "Thursday")
+ *   - avoid_days:       string[]  ALIAS for excluded_days — accepted so the
+ *                                 current NLP parser's output isn't silently
+ *                                 dropped during the field-rename window
  *   - excluded_courses: string[]  drop these course codes entirely
  *   - required_courses: string[]  if a required course has no eligible
  *                                 sections, return [] (caller decides
@@ -89,7 +92,12 @@ function eligibleSections(course, constraints = {}) {
   const noAfter = constraints.no_after
     ? timeToMinutes(constraints.no_after)
     : null;
-  const excludedDays = normalizeDayList(constraints.excluded_days);
+  // Merge excluded_days (canonical) with avoid_days (NLP parser's current
+  // field name) so neither shape silently no-ops.
+  const excludedDays = new Set([
+    ...normalizeDayList(constraints.excluded_days),
+    ...normalizeDayList(constraints.avoid_days),
+  ]);
 
   return course.sections.filter((s) => {
     if (noBefore != null && timeToMinutes(s.startTime) < noBefore) return false;
