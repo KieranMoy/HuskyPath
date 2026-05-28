@@ -17,7 +17,8 @@ test('parseConstraints returns normalized constraint object from Gemini output',
     assert.match(url, /generativelanguage.googleapis.com/);
     assert.equal(options.method, 'POST');
     const body = JSON.parse(options.body);
-    assert.match(body.prompt.text, /Extract a JSON constraint object/);
+    // Gemini request body uses `contents[0].parts[0].text` for the prompt
+    assert.match(body.contents?.[0]?.parts?.[0]?.text || '', /Extract a JSON constraint object/);
 
     return {
       ok: true,
@@ -25,15 +26,19 @@ test('parseConstraints returns normalized constraint object from Gemini output',
       json: async () => ({
         candidates: [
           {
-            output: JSON.stringify({
-              no_before: '10:00',
-              no_after: null,
-              light_days: ['Friday'],
-              preferred_times: ['afternoon'],
-              avoid_consecutive: true,
-              required_courses: ['CSE 142'],
-              excluded_courses: [],
-            }),
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    no_before: '10:00',
+                    light_days: ['Friday'],
+                    preferred_times: ['afternoon'],
+                    avoid_consecutive: true,
+                    required_courses: ['CSE 142'],
+                  }),
+                },
+              ],
+            },
           },
         ],
       }),
@@ -46,12 +51,10 @@ test('parseConstraints returns normalized constraint object from Gemini output',
 
   assert.deepEqual(result, {
     no_before: '10:00',
-    no_after: null,
     light_days: ['Friday'],
     preferred_times: ['afternoon'],
     avoid_consecutive: true,
     required_courses: ['CSE 142'],
-    excluded_courses: [],
   });
 });
 
@@ -64,7 +67,7 @@ test('parseConstraints throws when Gemini output is not valid JSON', async () =>
     json: async () => ({
       candidates: [
         {
-          output: 'I could not parse that',
+          content: { parts: [{ text: 'I could not parse that' }] },
         },
       ],
     }),
