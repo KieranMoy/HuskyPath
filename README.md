@@ -14,7 +14,7 @@ UW students describe their preferences in plain English — *"no classes before 
 ## Architecture
 
 ```
-User input ──► Claude API (NLP parser) ──► Structured constraints
+User input ──► Gemini API (NLP parser) ──► Structured constraints
                                                     │
    UW Time Schedule scraper ──► Course DB ──► Candidate generator
                                                     │
