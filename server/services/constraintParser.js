@@ -1,7 +1,7 @@
 'use strict';
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'gemini-2.5-flash-lite';
 const ALLOWED_PREF_TIMES = new Set(['morning', 'afternoon', 'evening']);
 const DAY_MAP = {
   m: 'Monday',
@@ -113,23 +113,47 @@ function validateConstraints(payload) {
     throw new Error('Model response did not return a JSON object');
   }
 
-  return {
-    no_before: normalizeTime(payload.no_before),
-    no_after: normalizeTime(payload.no_after),
-    avoid_days: normalizeDayList(payload.avoid_days),
-    avoid_consecutive: Boolean(payload.avoid_consecutive),
-  };
+  const result = {};
+
+  const no_before = normalizeTime(payload.no_before);
+  if (no_before) result.no_before = no_before;
+
+  const no_after = normalizeTime(payload.no_after);
+  if (no_after) result.no_after = no_after;
+
+  const excluded_days = normalizeDayList(payload.excluded_days);
+  if (excluded_days.length > 0) result.excluded_days = excluded_days;
+
+  const required_courses = normalizeStringArray(payload.required_courses);
+  if (required_courses.length > 0) result.required_courses = required_courses;
+
+  const excluded_courses = normalizeStringArray(payload.excluded_courses);
+  if (excluded_courses.length > 0) result.excluded_courses = excluded_courses;
+
+  const light_days = normalizeDayList(payload.light_days);
+  if (light_days.length > 0) result.light_days = light_days;
+
+  const preferred_times = normalizePreferredTimes(payload.preferred_times);
+  if (preferred_times.length > 0) result.preferred_times = preferred_times;
+
+  if (payload.avoid_consecutive) result.avoid_consecutive = true;
+
+  return result;
 }
 
 function buildPrompt(userText) {
-  return `Extract a JSON constraint object from the user's preferences. Return ONLY valid JSON, no explanations, no markdown, no prose.
+  return `Extract a JSON constraint object from the user's preferences. Return ONLY valid JSON, no explanations, no markdown, no prose. Omit any fields that are not mentioned or are empty.
 
-Schema:
+Schema (all fields optional):
 {
-  "no_before": "HH:MM or null",
-  "no_after": "HH:MM or null",
-  "avoid_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-  "avoid_consecutive": true|false
+  "no_before": "HH:MM",
+  "no_after": "HH:MM",
+  "excluded_days": ["Monday", "Friday"],
+  "excluded_courses": ["CSE 143", "MATH 126"],
+  "required_courses": ["CSE 142", "MATH 125"],
+  "light_days": ["Wednesday"],
+  "preferred_times": ["morning", "afternoon", "evening"],
+  "avoid_consecutive": true
 }
 
 Example 1:
@@ -137,29 +161,29 @@ Input: "no classes before 10am, avoid Mondays, no back to back classes"
 Output:
 {
   "no_before": "10:00",
-  "no_after": null,
-  "avoid_days": ["Monday"],
+  "excluded_days": ["Monday"],
   "avoid_consecutive": true
 }
 
 Example 2:
-Input: "no classes after 5pm, avoid Friday"
+Input: "no classes after 5pm, avoid Friday, light Friday"
 Output:
 {
-  "no_before": null,
   "no_after": "17:00",
-  "avoid_days": ["Friday"],
-  "avoid_consecutive": false
+  "excluded_days": ["Friday"],
+  "light_days": ["Friday"]
 }
 
 Example 3:
-Input: "not before 9am, not after 3pm, no Wednesdays, no back-to-back lectures"
+Input: "not before 9am, not after 3pm, no Wednesdays, no back-to-back lectures, prefer afternoons, need CSE 142"
 Output:
 {
   "no_before": "09:00",
   "no_after": "15:00",
-  "avoid_days": ["Wednesday"],
-  "avoid_consecutive": true
+  "excluded_days": ["Wednesday"],
+  "avoid_consecutive": true,
+  "preferred_times": ["afternoon"],
+  "required_courses": ["CSE 142"]
 }
 
 Input: "${userText.trim()}"
@@ -202,14 +226,26 @@ async function callGemini(prompt) {
 
   const result = await response.json();
   const candidate = result.candidates?.[0];
-  const content = candidate?.content;
-  if (!content || !content.parts || content.parts.length === 0) {
-    throw new Error('Gemini returned no output text');
+  let text = '';
+  if (candidate) {
+    if (typeof candidate.output === 'string') {
+      text = candidate.output;
+    } else if (candidate.content && Array.isArray(candidate.content.parts)) {
+      text = candidate.content.parts.map((part) => part.text || '').join('');
+    } else if (typeof candidate.outputText === 'string') {
+      text = candidate.outputText;
+    } else {
+      // Fallback: stringify the candidate so callers can see something
+      text = JSON.stringify(candidate);
+    }
   }
 
-  const text = content.parts.map((part) => part.text || '').join('');
   if (!text) {
-    throw new Error('Gemini returned empty text content');
+    // Log full result for debugging before throwing so developers can inspect
+    // the exact Gemini response in server logs (do not expose API keys).
+    // eslint-disable-next-line no-console
+    console.error('[constraintParser] Gemini raw result:', JSON.stringify(result));
+    throw new Error(`Gemini returned no output text: ${JSON.stringify(result).slice(0,200)}`);
   }
 
   return text;
@@ -222,13 +258,19 @@ async function parseConstraints({ text }) {
 
   const prompt = buildPrompt(text);
   const raw = await callGemini(prompt);
-  const jsonText = extractJson(raw);
+
+  let jsonText;
+  try {
+    jsonText = extractJson(raw);
+  } catch (err) {
+    throw new Error(`Unable to locate JSON object in model response: ${String(raw).slice(0,200)}`);
+  }
 
   try {
     const parsed = JSON.parse(jsonText);
     return validateConstraints(parsed);
   } catch (err) {
-    throw new Error(`Failed to parse Gemini JSON response: ${err.message}`);
+    throw new Error(`Failed to parse Gemini JSON response: ${err.message}. Raw: ${String(raw).slice(0,200)}`);
   }
 }
 
