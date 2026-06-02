@@ -5,7 +5,7 @@ AI-powered course & schedule planner for the University of Washington.
 Ryan Locquiao · Kieran Moynihan · Max Olshanskyy — DYOP Final Project
 
 - Repo:  https://github.com/ryanlocquiao/huskypath
-- Live:  https://huskypath.vercel.app
+- Live:  https://husky-path.vercel.app
 
 ## What it does
 
@@ -27,7 +27,7 @@ User input ──► Claude API (NLP parser) ──► Structured constraints
 | -------- | --------------------------------------------------------------------- |
 | Frontend | React 19, Vite, TailwindCSS (planned), deployed on Vercel             |
 | Backend  | Node.js + Express 5, PostgreSQL (planned)                             |
-| AI       | Anthropic Claude API for the natural-language constraint parser       |
+| AI       | Google Gemini API (NLP parser) for the natural-language constraint parser       |
 | Data     | UW Time Schedule (scraped HTML), Rate My Professor, public grade data |
 
 ## Repo layout
@@ -159,6 +159,6 @@ No third-party test framework — Node 18+ built-in runner only.
 - [x] **Candidate-schedule generator (conflict-free search)**
 - [x] **Multi-dimensional scoring model + ranker**
 - [x] **One-shot `/api/plan` integration endpoint**
-- [ ] React calendar UI wired to live `/api/plan`
-- [ ] Live UW scraper verified against real Time Schedule pages
-- [ ] iCal / PDF export
+- [x] React calendar UI wired to live `/api/plan`
+- [x] Live UW scraper verified against real Time Schedule pages
+- [x] iCal / PDF export
